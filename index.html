@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>puzzle</title>
+    <link rel="stylesheet" href="leaflet-1.7.1/leaflet.css"/>
+    <script src="leaflet-1.7.1/leaflet-src.js"></script>
+    <script src="leaflet-1.7.1/leaflet-providers.js"></script>
+    <script src="leaflet-1.7.1/leaflet-image.js"></script>
+    <!-- Bootstrap CSS -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="Toast.css">
+    <style>
+        #map {
+            width: 500px;
+            height: 500px;
+            border: 1px solid black;
+        }
+
+        #mapHolder {
+            height: 520px;
+            width: 550px;
+            margin: 10px;
+        }
+
+        #puzzleHolder {
+            height: 500px;
+            width: 500px;
+            margin: 10px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .puzzle {
+            margin: 2px;
+        }
+
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<button id="getLocation">Get Current Location</button>
+<button id="saveButton">Save Raster Map</button>
+<br>
+<div id="mapHolder"></div>
+<div id="counter"></div>
+<div id="puzzleHolder"></div>
+
+
+<script>
+    let map = L.map('map');
+    //L.tileLayer.provider('OpenStreetMap.DE').addTo(map);
+    L.tileLayer.provider('Esri.WorldImagery').addTo(map);
+    if (!navigator.geolocation) {
+        console.log("No geolocation.");
+    }
+
+    navigator.geolocation.getCurrentPosition(position => {
+        console.log(position);
+        let lat = position.coords.latitude;
+        let lon = position.coords.longitude;
+
+        map.setView([lat, lon], 15);
+        L.marker([lat, lon]).addTo(map);
+    }, positionError => {
+        console.error(positionError);
+    });
+
+
+    document.getElementById("getLocation").addEventListener("click", function (event) {
+        if (!navigator.geolocation) {
+            console.log("No geolocation.");
+        }
+
+        navigator.geolocation.getCurrentPosition(position => {
+            console.log(position);
+            let lat = position.coords.latitude;
+            let lon = position.coords.longitude;
+
+            map.setView([lat, lon]);
+        }, positionError => {
+            console.error(positionError);
+            console.error(positionError);
+        });
+    });
+
+    document.getElementById("saveButton").addEventListener("click", function () {
+        leafletImage(map, function (err, canvas) {
+            document.getElementById("mapHolder").appendChild(canvas);
+            document.getElementById("mapHolder").addEventListener("click", function () {
+                slicePuzzle(canvas);
+            });
+        });
+    });
+    let arr = [];
+    let goodPuzzle = [];
+    function slicePuzzle(image) {
+        let puzzles = [];
+        let columns = 4;
+        let rows = 4;
+        let puzzleSize = columns * rows;
+        let puzzleHeight = image.offsetHeight / columns - 4;
+        let puzzleWidth = image.offsetWidth / rows - 4;
+
+        for (let i = 0; i < columns; i++) {
+            for (let j = 0; j < rows; j++) {
+                let canvas = document.createElement("canvas");
+                canvas.width = puzzleWidth;
+                canvas.height = puzzleHeight;
+                canvas.getContext('2d').drawImage(image, j * puzzleWidth, i * puzzleHeight, puzzleWidth, puzzleHeight, 0, 0, puzzleHeight, puzzleWidth);
+                puzzles.push(canvas);
+            }
+        }
+
+        for (let i = 0; i < puzzleSize; i++) {
+            let element = document.createElement("div");
+            element.style.width = puzzleWidth + "px";
+            element.style.height = puzzleHeight + "px";
+            element.style.backgroundImage = "url('" + puzzles[i].toDataURL() + "')";
+            element.style.backgroundColor = "red";
+            element.classList.add("puzzle");
+            element.setAttribute('id',i);
+            element.setAttribute('draggable', "true");
+            element.classList.add('drag-target');
+            goodPuzzle.push(element);
+
+        }
+
+        while (arr.length < puzzleSize){
+            let rand = Math.floor(Math.random()*puzzleSize);
+            if (arr.indexOf(rand) === -1){
+                arr.push(rand);
+            }
+        }
+        console.log(arr);
+        for (let i = 0; i < arr.length;i++){
+            document.getElementById("puzzleHolder").appendChild(goodPuzzle[arr[i]]);
+        }
+        createListener();
+    }
+
+    function createListener() {
+        let puzzle = document.querySelectorAll('.puzzle');
+        for (let item of puzzle) {
+            item.addEventListener("dragstart", function (event) {
+                event.dataTransfer.setData("text", this.id);
+            });
+        }
+
+        let targets = document.querySelectorAll(".drag-target");
+        for (let target of targets) {
+
+            target.addEventListener("dragover", function (event) {
+                event.preventDefault();
+            });
+            target.addEventListener("drop", function (event) {
+                let a = event.dataTransfer.getData('text');
+                let b = event.target.id;
+                let indexA = arr.indexOf(parseInt(a));
+                let indexB = arr.indexOf(parseInt(b));
+
+                let tmp = arr[indexA];
+                arr[indexA] = arr[indexB];
+                arr[indexB] = tmp;
+
+                document.getElementById("puzzleHolder").textContent = '';
+                for (let i = 0; i < arr.length;i++){
+                    document.getElementById("puzzleHolder").appendChild(goodPuzzle[arr[i]]);
+                }
+                checkWin();
+            }, false);
+        }
+    }
+
+    function checkWin(){
+        let cnt = 0;
+        for (let i = 0; i < goodPuzzle.length; i++){
+            if(parseInt(goodPuzzle[i].id) === parseInt(arr[i])){
+                cnt++;
+            }
+
+        }
+        if (cnt === goodPuzzle.length){
+            new Toast({message: 'Wygrałeś!'});
+        }
+
+        document.getElementById("counter").innerText = "Dobre puzzle: " + cnt + "/" + goodPuzzle.length;
+
+
+    }
+
+</script>
+<script src="Toast.js"></script>
+</body>
+</html>
